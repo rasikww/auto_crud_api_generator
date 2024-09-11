@@ -10,3 +10,13 @@ export async function getTablesAndViews() {
     console.log(result.rows);
     return result.rows;
 }
+
+export async function getColumnsForTable(tableName: string) {
+    const query = `
+      SELECT column_name, data_type, is_nullable
+      FROM information_schema.columns
+      WHERE table_name = $1;
+    `;
+    const result = await queryDB(query, [tableName]);
+    return result.rows;
+}
