@@ -24,3 +24,29 @@ export async function insertIntoTable(
     const result = await queryDB(query, values);
     return result.rows[0];
 }
+
+export async function updateRowOfTable(
+    tableName: string,
+    data: Record<string, any>,
+    pk: string | null,
+    pkValue: string
+) {
+    const columns = Object.keys(data);
+    //creating the SET clause for the update
+    const setClause = columns
+        .map((col, index) => `${col} = $${index + 1}`)
+        .join(", ");
+
+    //creating sql query
+    const query = `
+    UPDATE ${tableName}
+    SET ${setClause}
+    WHERE ${pk} = $${columns.length + 1}
+    RETURNING *;
+    `;
+
+    const values = [...columns.map((col) => data[col]), pkValue];
+
+    const result = await queryDB(query, values);
+    return result.rows[0];
+}

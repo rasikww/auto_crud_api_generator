@@ -2,10 +2,12 @@ import app from "../app";
 import {
     getTablesAndViews,
     getColumnsForTable,
+    getPrimaryKeyName,
 } from "../models/introspectionModel";
 import {
     getAllFromTable,
     insertIntoTable,
+    updateRowOfTable,
 } from "../models/routesGenerationModel";
 
 export function generateCRUDRoutesForATable(tableName: string) {
@@ -30,18 +32,13 @@ export function generateCRUDRoutesForATable(tableName: string) {
         const data = req.body;
 
         try {
-            //validating req.body contains valid columns
-            const columnInfoArray = await getColumnsForTable(tableName);
-            const validColumnsArray = columnInfoArray.map(
-                (columnInfo) => columnInfo.column_name
+            const [isValid, invalidColumns] = await areColumnsValid(
+                tableName,
+                data
             );
-            const invalidColumnsArray = Object.keys(data).filter(
-                (col) => !validColumnsArray.includes(col)
-            );
-
-            if (invalidColumnsArray.length > 0) {
+            if (!isValid) {
                 return res.status(400).json({
-                    error: `invalid columns: ${invalidColumnsArray.join(", ")}`,
+                    error: `invalid columns: ${invalidColumns?.join(", ")}`,
                 });
             }
 
@@ -54,4 +51,50 @@ export function generateCRUDRoutesForATable(tableName: string) {
             }
         }
     });
+
+    app.put(`/${tableName}/:id`, async (req, res) => {
+        const { id } = req.params;
+        const data = req.body;
+        const pkName = await getPrimaryKeyName(tableName);
+
+        try {
+            const [isValid, invalidColumns] = await areColumnsValid(
+                tableName,
+                data
+            );
+            if (!isValid) {
+                return res.status(400).json({
+                    error: `invalid columns: ${invalidColumns?.join(", ")}`,
+                });
+            }
+
+            const result = await updateRowOfTable(tableName, data, pkName, id);
+            res.status(200).json(result);
+        } catch (error) {
+            console.error(`error occurred: `, error);
+            if (error instanceof Error) {
+                res.status(500).json({ error: `${error.message}` });
+            }
+        }
+    });
+
+    //validating columns
+    async function areColumnsValid(
+        tableName: string,
+        data: Record<string, any>
+    ): Promise<[boolean, any[]?]> {
+        try {
+            const columnInfoArray = await getColumnsForTable(tableName);
+            const validColumnsArray = columnInfoArray.map(
+                (columnInfo) => columnInfo.column_name
+            );
+            const invalidColumnsArray = Object.keys(data).filter(
+                (col) => !validColumnsArray.includes(col)
+            );
+            return [invalidColumnsArray.length === 0, invalidColumnsArray];
+        } catch (error) {
+            console.error("Error fetching table columns:", error);
+            return [false, []]; //if any error occurs, gives false..
+        }
+    }
 }
